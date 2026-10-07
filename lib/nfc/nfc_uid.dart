@@ -1,14 +1,25 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
 
-String formatUid(Uint8List id) =>
-    id.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
+String formatUid(Uint8List id) {
+  final hex = id
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join()
+      .toUpperCase();
+  if (hex.length >= 8 && hex.length.isEven) {
+    final pairs = <String>[];
+    for (var i = 0; i < hex.length; i += 2) {
+      pairs.add(hex.substring(i, i + 2));
+    }
+    return pairs.join(':');
+  }
+  return hex;
+}
 
 String? uidFromTag(NfcTag tag) {
   if (Platform.isAndroid) {

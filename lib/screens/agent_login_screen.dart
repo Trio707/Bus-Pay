@@ -7,6 +7,7 @@ import '../core/navigation/app_page_route.dart';
 import '../core/navigation/auth_reveal.dart';
 import '../l10n/strings.dart';
 import '../presentation/agent/agent_home_page.dart';
+import 'change_password_screen.dart';
 import '../services/api_service.dart';
 import '../state/app_state.dart';
 import 'agent_forgot_password_screen.dart';
@@ -63,7 +64,9 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
       await playAuthReveal(
         context: context,
         outgoing: _face(interactive: false),
-        incoming: const AgentHomePage(),
+        incoming: app.mustChangePassword
+            ? const ChangePasswordScreen(forced: true)
+            : const AgentHomePage(),
         onSettled: app.finishLoginReveal,
       );
     } catch (e) {

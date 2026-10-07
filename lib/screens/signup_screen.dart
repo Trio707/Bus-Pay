@@ -219,7 +219,7 @@ class _SignupScreenState extends State<SignupScreen> {
     return [
       TextField(
         controller: firstName,
-        textCapitalization: TextCapitalization.words,
+        textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
           labelText: s.firstName,
           prefixIcon: const Icon(Icons.person_outline),
@@ -229,7 +229,7 @@ class _SignupScreenState extends State<SignupScreen> {
       const SizedBox(height: 12),
       TextField(
         controller: lastName,
-        textCapitalization: TextCapitalization.words,
+        textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
           labelText: s.lastName,
           prefixIcon: const Icon(Icons.person_outline),

@@ -42,6 +42,7 @@ class CardRepositoryImpl implements CardRepository {
     String? lastName,
     String? phone,
     int amount = 0,
+    String? idempotencyKey,
   }) {
     return ApiService.renewCard(
       token: token,
@@ -51,6 +52,7 @@ class CardRepositoryImpl implements CardRepository {
       lastName: lastName,
       phone: phone,
       amount: amount,
+      idempotencyKey: idempotencyKey,
     );
   }
 

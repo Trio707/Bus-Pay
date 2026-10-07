@@ -53,7 +53,9 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Bus Pay inahitaji kamera kusoma alama za vidole vinne.</string>
+	<string>Bus Pay inahitaji kamera kusoma alama za vidole vinne na kupiga picha ya wasifu.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Bus Pay inahitaji picha kutoka kwenye simu kwa picha ya wasifu.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

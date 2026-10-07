@@ -26,6 +26,7 @@ class _TopUpCardPageState extends State<TopUpCardPage> {
   String holderName = '';
   String phone = '';
   String amountError = '';
+  String? topUpKey;
 
   @override
   void dispose() {
@@ -103,6 +104,7 @@ class _TopUpCardPageState extends State<TopUpCardPage> {
     if (amountError.isNotEmpty) return;
 
     final token = AppScope.of(context).authToken ?? '';
+    topUpKey ??= newIdempotencyKey();
     setState(() => busy = true);
     try {
       final result = await ApiService.topUpWallet(
@@ -110,12 +112,12 @@ class _TopUpCardPageState extends State<TopUpCardPage> {
         amount: value,
         nfcUid: nfcUid,
         serialNumber: cardNumber,
+        idempotencyKey: topUpKey,
       );
+      topUpKey = null;
       if (!mounted) return;
 
-      final cardData = result['card'] as Map<String, dynamic>? ?? {};
       final credited = (result['credited'] as num?)?.toInt() ?? value;
-      final next = (cardData['balance'] as num?)?.toInt();
 
       await showDialog<void>(
         context: context,
@@ -129,11 +131,6 @@ class _TopUpCardPageState extends State<TopUpCardPage> {
               const SizedBox(height: 8),
               Text('${s.cardNumber}: $cardNumber'),
               Text('${s.amountAdded}: ${s.tzs(credited)}'),
-              if (next != null)
-                Text(
-                  '${s.newBalance}: ${s.tzs(next)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
             ],
           ),
           actions: [

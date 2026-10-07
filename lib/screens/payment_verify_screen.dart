@@ -26,18 +26,22 @@ class PaymentVerifyScreen extends StatefulWidget {
 
 class _PaymentVerifyScreenState extends State<PaymentVerifyScreen> {
   bool busy = false;
+  String? fareKey;
 
   Future<void> confirm() async {
     final app = AppScope.of(context);
     final token = app.authToken ?? '';
+    fareKey ??= newIdempotencyKey();
     setState(() => busy = true);
     try {
       final result = await ApiService.tapPay(
         token: token,
         amount: widget.amount,
+        idempotencyKey: fareKey!,
         serialNumber: widget.serialNumber,
         nfcUid: widget.nfcUid,
       );
+      fareKey = null;
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
       final reference = (result['reference'] ?? '').toString();
@@ -52,7 +56,7 @@ class _PaymentVerifyScreenState extends State<PaymentVerifyScreen> {
         ),
       );
       Future<void>.delayed(const Duration(milliseconds: 400), () {
-        app.refreshLedger();
+        app.refreshLedger(history: false);
       });
     } catch (e) {
       if (!mounted) return;

@@ -11,10 +11,22 @@ import '../../../widgets/app_logo.dart';
 import 'agent_settings_page.dart';
 import 'renew_card_page.dart';
 import 'top_up_card_page.dart';
+import 'till_float_card.dart';
 import 'widgets/floating_action_card.dart';
 
-class AgentHomePage extends StatelessWidget {
+class AgentHomePage extends StatefulWidget {
   const AgentHomePage({super.key});
+
+  @override
+  State<AgentHomePage> createState() => _AgentHomePageState();
+}
+
+class _AgentHomePageState extends State<AgentHomePage> {
+  final _floatKey = GlobalKey<TillFloatCardState>();
+
+  Future<void> _refresh() async {
+    await _floatKey.currentState?.reload();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,45 +63,13 @@ class AgentHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primary,
-                  primary.withValues(alpha: 0.75),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  app.displayName,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  app.agentTill,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  s.wakalaDesk,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
+          TillFloatCard(key: _floatKey),
           const SizedBox(height: 22),
           Text(
             s.cardServices,
@@ -153,6 +133,7 @@ class AgentHomePage extends StatelessWidget {
             ],
           ),
         ],
+        ),
       ),
     );
   }

@@ -1,10 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import '../auth/account_store.dart';
 import '../core/constants/app_config.dart';
+
+/// Stable id for one financial attempt. Retries must reuse it.
+String newIdempotencyKey() {
+  final random = Random.secure();
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return 'bp${List.generate(24, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
+}
+
+String _capitalName(String value) =>
+    value.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
 
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode});
@@ -29,19 +41,31 @@ class ApiService {
     } catch (_) {}
   }
 
+  static Future<bool> _probe(String host) async {
+    try {
+      final response = await _client
+          .get(Uri.parse('$host/health'))
+          .timeout(_discoverTimeout);
+      return response.statusCode >= 200 && response.statusCode < 500;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> _discover({bool force = false}) async {
     if (_ready && !force) return;
     _ready = false;
+    if (!force) {
+      final saved = await AccountStore.readApiHost();
+      if (saved != null && saved.isNotEmpty && await _probe(saved)) {
+        _baseUrl = saved;
+        _ready = true;
+        return;
+      }
+    }
     final hits = await Future.wait(
       AppConfig.apiHosts.map((host) async {
-        try {
-          final response = await _client
-              .get(Uri.parse('$host/health'))
-              .timeout(_discoverTimeout);
-          if (response.statusCode >= 200 && response.statusCode < 500) {
-            return host;
-          }
-        } catch (_) {}
+        if (await _probe(host)) return host;
         return null;
       }),
     );
@@ -49,6 +73,7 @@ class ApiService {
       if (hits.contains(host)) {
         _baseUrl = host;
         _ready = true;
+        await AccountStore.saveApiHost(host);
         return;
       }
     }
@@ -122,8 +147,8 @@ class ApiService {
     required String confirmPin,
   }) {
     return _post('/auth/register/conductor', {
-      'firstName': firstName.trim(),
-      'lastName': lastName.trim(),
+      'firstName': _capitalName(firstName),
+      'lastName': _capitalName(lastName),
       'phone': phone.trim(),
       'nida': nida.trim(),
       'pin': pin,
@@ -214,8 +239,8 @@ class ApiService {
     return _post(
       '/platform/cards/activate',
       {
-        'firstName': firstName.trim(),
-        'lastName': lastName.trim(),
+        'firstName': _capitalName(firstName),
+        'lastName': _capitalName(lastName),
         'phone': phone.trim(),
         'cardNumber': cardNumber.trim(),
         'nfcUid': nfcUid.trim(),
@@ -238,8 +263,8 @@ class ApiService {
     return _post(
       '/platform/cards',
       {
-        'firstName': firstName.trim(),
-        'lastName': lastName.trim(),
+        'firstName': _capitalName(firstName),
+        'lastName': _capitalName(lastName),
         'phone': phone.trim(),
         if (nida != null && nida.trim().isNotEmpty) 'nida': nida.trim(),
         if (serialNumber != null && serialNumber.trim().isNotEmpty)
@@ -266,13 +291,45 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getTransactions({
     required String token,
+    int limit = 20,
+    String? cursor,
+    String? since,
+    bool summary = false,
   }) {
-    return _get('/platform/transactions', token: token);
+    final query = <String, String>{
+      'limit': '$limit',
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      if (since != null && since.isNotEmpty) 'since': since,
+      if (summary) 'summary': '1',
+    };
+    final path = query.entries
+        .map((entry) =>
+            '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .join('&');
+    return _get('/platform/transactions?$path', token: token);
+  }
+
+  static Future<Map<String, dynamic>> getAgentFloat({
+    required String token,
+  }) {
+    return _get('/platform/float', token: token);
+  }
+
+  static Future<Map<String, dynamic>> getAgentFloatTransactions({
+    required String token,
+    int page = 1,
+    int limit = 20,
+  }) {
+    return _get(
+      '/platform/float/transactions?page=$page&limit=$limit',
+      token: token,
+    );
   }
 
   static Future<Map<String, dynamic>> tapPay({
     required String token,
     required int amount,
+    required String idempotencyKey,
     String? serialNumber,
     String? nfcUid,
     String serviceType = 'TRANSPORT',
@@ -284,6 +341,7 @@ class ApiService {
         'amount': amount,
         'serviceType': serviceType,
         'merchantCode': merchantCode,
+        'idempotencyKey': idempotencyKey,
         if (serialNumber != null && serialNumber.trim().isNotEmpty)
           'serialNumber': serialNumber.trim(),
         if (nfcUid != null && nfcUid.trim().isNotEmpty) 'nfcUid': nfcUid.trim(),
@@ -320,6 +378,7 @@ class ApiService {
     String? lastName,
     String? phone,
     int amount = 0,
+    String? idempotencyKey,
   }) {
     return _post(
       '/platform/cards/${Uri.encodeComponent(serialNumber.trim())}/renew',
@@ -331,6 +390,8 @@ class ApiService {
           'lastName': lastName.trim(),
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
         'amount': amount,
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotencyKey': idempotencyKey,
       },
       token: token,
     );
@@ -354,6 +415,7 @@ class ApiService {
     String? nfcUid,
     String? phone,
     String? walletAccountNumber,
+    String? idempotencyKey,
   }) {
     return _post(
       '/platform/wallets/topup',
@@ -366,6 +428,8 @@ class ApiService {
         if (walletAccountNumber != null &&
             walletAccountNumber.trim().isNotEmpty)
           'walletAccountNumber': walletAccountNumber.trim(),
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotencyKey': idempotencyKey,
       },
       token: token,
     );
@@ -386,44 +450,150 @@ class ApiService {
     required String token,
     required String tillNumber,
     required int amount,
+    String? idempotencyKey,
   }) {
     return _post(
       '/platform/withdrawals',
       {
         'tillNumber': tillNumber.trim(),
         'amount': amount,
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotencyKey': idempotencyKey,
       },
       token: token,
     );
   }
 
+  static Future<Map<String, dynamic>> quoteConductorPayout({
+    required String token,
+    required int amount,
+  }) {
+    return _get(
+      '/platform/conductor/payouts/quote?amount=$amount',
+      token: token,
+    );
+  }
+
+  static Future<Map<String, dynamic>> requestConductorPayout({
+    required String token,
+    required String method,
+    required String provider,
+    required int amount,
+    required String idempotencyKey,
+    String? mobileNumber,
+    String? accountNumber,
+    String? accountName,
+  }) {
+    return _post(
+      '/platform/conductor/payouts',
+      {
+        'method': method,
+        'provider': provider.trim(),
+        'amount': amount,
+        'idempotencyKey': idempotencyKey,
+        if (mobileNumber != null && mobileNumber.trim().isNotEmpty)
+          'mobileNumber': mobileNumber.trim(),
+        if (accountNumber != null && accountNumber.trim().isNotEmpty)
+          'accountNumber': accountNumber.trim(),
+        if (accountName != null && accountName.trim().isNotEmpty)
+          'accountName': accountName.trim(),
+      },
+      token: token,
+    );
+  }
+
+  /// Retries transient failures with backoff. Financial posts retry only when
+  /// [canRetry] is set, and they resend the same body and idempotency key.
   static Future<http.Response> _send(
-    Future<http.Response> Function(String base) run,
-  ) async {
+    Future<http.Response> Function(String base) run, {
+    bool canRetry = true,
+  }) async {
     await _discover();
-    try {
-      return await run(_baseUrl).timeout(_requestTimeout);
-    } on TimeoutException {
-      _ready = false;
-    } on SocketException {
-      _ready = false;
-    } on HttpException {
-      _ready = false;
-    } on http.ClientException {
-      _ready = false;
+    final attempts = canRetry ? 3 : 1;
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(
+          Duration(milliseconds: 400 * (1 << (attempt - 1))),
+        );
+        _ready = false;
+        await _discover(force: true);
+      }
+      try {
+        final response = await run(_baseUrl).timeout(_requestTimeout);
+        final code = response.statusCode;
+        if (code == 400 || code == 401 || code == 403) return response;
+        if (code >= 500 && attempt + 1 < attempts) continue;
+        return response;
+      } on TimeoutException {
+        _ready = false;
+      } on SocketException {
+        _ready = false;
+      } on HttpException {
+        _ready = false;
+      } on http.ClientException {
+        _ready = false;
+      }
     }
-    await _discover(force: true);
-    try {
-      return await run(_baseUrl).timeout(_requestTimeout);
-    } on TimeoutException {
-      throw ApiException('Server did not respond', statusCode: 408);
-    } on SocketException {
-      throw ApiException('Server did not respond');
-    } on HttpException {
-      throw ApiException('Server did not respond');
-    } on http.ClientException {
-      throw ApiException('Server did not respond');
+    throw ApiException('Server did not respond', statusCode: 408);
+  }
+
+  static Future<Map<String, dynamic>> uploadProfilePhoto({
+    required String token,
+    required List<int> bytes,
+  }) async {
+    await _discover();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/auth/profile/photo'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Accept'] = 'application/json';
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'photo',
+        bytes,
+        filename: 'photo.jpg',
+      ),
+    );
+    final streamed = await _client.send(request).timeout(const Duration(seconds: 20));
+    final response = await http.Response.fromStream(streamed);
+    return _decode(response, authorized: true);
+  }
+
+  static Future<Map<String, dynamic>> deleteProfilePhoto({
+    required String token,
+  }) async {
+    await _discover();
+    final response = await _client
+        .delete(
+          Uri.parse('$_baseUrl/auth/profile/photo'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 20));
+    return _decode(response, authorized: true);
+  }
+
+  static Future<List<int>?> downloadProfilePhoto({
+    required String token,
+  }) async {
+    await _discover();
+    final response = await _client
+        .get(
+          Uri.parse('$_baseUrl/auth/profile/photo'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'image/jpeg',
+          },
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode == 304 || response.statusCode == 404) return null;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException('Photo was not uploaded. Try again.', statusCode: response.statusCode);
     }
+    return response.bodyBytes;
   }
 
   static Future<Map<String, dynamic>> _get(
@@ -460,6 +630,7 @@ class ApiService {
         headers: headers,
         body: jsonEncode(body),
       ),
+      canRetry: body.containsKey('idempotencyKey'),
     );
     return _decode(response, authorized: token != null && token.isNotEmpty);
   }

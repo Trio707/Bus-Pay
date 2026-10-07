@@ -148,7 +148,7 @@ class _SajiliCardScreenState extends State<SajiliCardScreen> {
         builder: (ctx) => AlertDialog(
           title: Text(s.cardRegistered),
           content: Text(
-            '${firstName.text.trim()} ${lastName.text.trim()}\n'
+            '${'${firstName.text.trim()} ${lastName.text.trim()}'.toUpperCase()}\n'
             '${card.text.trim()}\n'
             '${s.newBalance}: ${s.tzs(balance)}$smsNote',
           ),
@@ -227,7 +227,7 @@ class _SajiliCardScreenState extends State<SajiliCardScreen> {
       const SizedBox(height: 16),
       TextField(
         controller: firstName,
-        textCapitalization: TextCapitalization.words,
+        textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
           labelText: '${s.firstName} *',
           prefixIcon: const Icon(Icons.person_outline),
@@ -237,7 +237,7 @@ class _SajiliCardScreenState extends State<SajiliCardScreen> {
       const SizedBox(height: 14),
       TextField(
         controller: lastName,
-        textCapitalization: TextCapitalization.words,
+        textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
           labelText: '${s.lastName} *',
           prefixIcon: const Icon(Icons.person_outline),
@@ -342,7 +342,7 @@ class _SajiliCardScreenState extends State<SajiliCardScreen> {
       ),
       const SizedBox(height: 8),
       Text(
-        '${firstName.text.trim()} ${lastName.text.trim()} · ${card.text.trim()}',
+        '${'${firstName.text.trim()} ${lastName.text.trim()}'.toUpperCase()} · ${card.text.trim()}',
         style: TextStyle(color: Colors.grey.shade700),
       ),
       const SizedBox(height: 16),

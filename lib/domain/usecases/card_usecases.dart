@@ -49,6 +49,7 @@ class RenewCard {
     String? lastName,
     String? phone,
     int amount = 0,
+    String? idempotencyKey,
   }) {
     return _cards.renewCard(
       token: token,
@@ -58,6 +59,7 @@ class RenewCard {
       lastName: lastName,
       phone: phone,
       amount: amount,
+      idempotencyKey: idempotencyKey,
     );
   }
 }

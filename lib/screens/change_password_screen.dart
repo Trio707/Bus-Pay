@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../auth/agent_password_rule.dart';
 import '../l10n/strings.dart';
+import '../presentation/agent/agent_home_page.dart';
 import '../services/api_service.dart';
 import '../state/app_state.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  const ChangePasswordScreen({super.key});
+  const ChangePasswordScreen({super.key, this.forced = false});
+
+  final bool forced;
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -41,7 +44,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     }
     if (!AgentPasswordRule.isValid(password.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(s.strongPasswordHint)),
+        SnackBar(content: Text(s.passwordTooWeak)),
       );
       return;
     }
@@ -52,7 +55,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    final token = AppScope.of(context).authToken ?? '';
+    final app = AppScope.of(context);
+    final token = app.authToken ?? '';
     setState(() => busy = true);
     try {
       await ApiService.changeAgentPassword(
@@ -62,10 +66,18 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         confirmPassword: confirm.text,
       );
       if (!mounted) return;
+      app.passwordChangeCompleted();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s.passwordChanged)),
       );
-      Navigator.pop(context);
+      if (widget.forced) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const AgentHomePage()),
+          (route) => false,
+        );
+      } else {
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,8 +91,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final s = S(AppScope.of(context).language);
-    return Scaffold(
-      appBar: AppBar(title: Text(s.changePassword)),
+    final level = AgentPasswordRule.strength(password.text);
+    return PopScope(
+      canPop: !widget.forced,
+      child: Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: !widget.forced,
+        title: Text(s.changePassword),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -112,9 +130,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           TextField(
             controller: password,
             obscureText: obscure,
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               labelText: s.newPassword,
-              helperText: s.strongPasswordHint,
+              helperText: password.text.isEmpty
+                  ? s.strongPasswordHint
+                  : s.passwordStrength(level),
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
                 icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
@@ -164,6 +185,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }

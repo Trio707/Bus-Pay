@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../auth/account_store.dart';
@@ -12,6 +14,8 @@ class Transaction {
     this.type = TransactionType.nauli,
     this.detail = '',
     this.reference = '',
+    this.fee,
+    this.totalDebit,
   });
 
   final String passengerName;
@@ -20,6 +24,8 @@ class Transaction {
   final TransactionType type;
   final String detail;
   final String reference;
+  final int? fee;
+  final int? totalDebit;
 }
 
 enum TransactionType { nauli, toaPesa, tumaPesa }
@@ -39,6 +45,7 @@ class UserAccount {
     this.nida = '',
     this.email = '',
     this.tillNumber = '',
+    this.id = '',
   });
 
   String username;
@@ -50,8 +57,9 @@ class UserAccount {
   String nida;
   String email;
   String tillNumber;
+  String id;
 
-  String get fullName => '$firstName $lastName'.trim();
+  String get fullName => '$firstName $lastName'.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
 }
 
 class AppState extends ChangeNotifier {
@@ -61,9 +69,14 @@ class AppState extends ChangeNotifier {
   AppLanguage language = AppLanguage.sw;
   DisplaySize displaySize = DisplaySize.normal;
   bool walletHidden = true;
+  bool dataSaver = true;
+  bool ledgerHasMore = false;
+  String? ledgerCursor;
   UserRole? currentRole;
   UserAccount? currentUser;
   String? authToken;
+  bool mustChangePassword = false;
+  String? profilePhotoUpdatedAt;
   String? hiddenUsername;
 
   double get textScale => switch (displaySize) {
@@ -77,6 +90,10 @@ class AppState extends ChangeNotifier {
   String get displayPhone => currentUser?.phone ?? '';
   String get displayEmail => currentUser?.email ?? '';
   String get agentTill => currentUser?.tillNumber ?? '0000-0000';
+  int get historyPageSize => dataSaver ? 10 : 20;
+
+  Future<void>? _ledgerFlight;
+  bool _ledgerFlightHasHistory = false;
 
   void applyRemoteLogin(
     Map<String, dynamic> data, {
@@ -112,14 +129,19 @@ class AppState extends ChangeNotifier {
       username: username.isEmpty ? phone : username,
       password: '',
       role: role,
-      firstName: first.isEmpty ? 'Conductor' : first,
-      lastName: last,
+      firstName: first.isEmpty ? 'Conductor' : first.toUpperCase(),
+      lastName: last.toUpperCase(),
       phone: phone,
       nida: (user['nida'] ?? '').toString(),
       email: (user['email'] ?? '').toString(),
       tillNumber: (user['tillNumber'] ?? user['till'] ?? '').toString(),
+      id: (user['id'] ?? '').toString(),
     );
     currentRole = role;
+    mustChangePassword = user['mustChangePassword'] == true;
+    final photoVersion = user['profilePhotoUpdatedAt']?.toString();
+    profilePhotoUpdatedAt =
+        photoVersion == null || photoVersion.isEmpty ? null : photoVersion;
     final collected = user['collected'] ?? data['collected'];
     if (collected is num) walletBalance = collected.toInt();
     if (role == UserRole.conductor && username.isNotEmpty) {
@@ -130,7 +152,7 @@ class AppState extends ChangeNotifier {
     // Load ledger after navigation settles — avoids login-screen flicker.
     if (scheduleLedger) {
       Future<void>.delayed(const Duration(milliseconds: 350), () {
-        refreshLedger();
+        refreshLedger(history: !dataSaver);
       });
     }
   }
@@ -139,12 +161,14 @@ class AppState extends ChangeNotifier {
   void finishLoginReveal() {
     notifyListeners();
     Future<void>.delayed(const Duration(milliseconds: 200), () {
-      refreshLedger();
+      refreshLedger(history: !dataSaver);
     });
   }
 
   Future<void> loadSavedAccount() async {
     hiddenUsername = await AccountStore.readUsername();
+    dataSaver = await AccountStore.readDataSaver();
+    await _restoreLedger();
     notifyListeners();
   }
 
@@ -154,22 +178,125 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setProfilePhotoVersion(String? updatedAt) {
+    profilePhotoUpdatedAt =
+        updatedAt == null || updatedAt.isEmpty ? null : updatedAt;
+    notifyListeners();
+  }
+
+  void passwordChangeCompleted() {
+    mustChangePassword = false;
+    notifyListeners();
+  }
+
   void logout() {
     currentUser = null;
     currentRole = null;
     authToken = null;
+    mustChangePassword = false;
+    profilePhotoUpdatedAt = null;
     walletBalance = 0;
     transactions.clear();
+    ledgerCursor = null;
+    ledgerHasMore = false;
+    AccountStore.clearSessionCache();
     notifyListeners();
   }
 
-  Future<void> refreshLedger() async {
+  void setDataSaver(bool enabled) {
+    dataSaver = enabled;
+    AccountStore.saveDataSaver(enabled);
+    notifyListeners();
+  }
+
+  /// One in-flight ledger read. A history request is not replaced by a summary.
+  Future<void> refreshLedger({bool history = true}) {
+    if (_ledgerFlight != null && (_ledgerFlightHasHistory || !history)) {
+      return _ledgerFlight!;
+    }
+    final run = _loadLedger(history);
+    _ledgerFlight = run;
+    _ledgerFlightHasHistory = history;
+    return run.whenComplete(() {
+      if (identical(_ledgerFlight, run)) _ledgerFlight = null;
+    });
+  }
+
+  Future<void> loadMoreLedger() async {
+    final cursor = ledgerCursor;
+    if (!ledgerHasMore || cursor == null || cursor.isEmpty) return;
     final token = authToken;
     if (token == null || token.isEmpty) return;
     try {
-      final data = await ApiService.getTransactions(token: token);
-      applyLedger(data);
+      final data = await ApiService.getTransactions(
+        token: token,
+        limit: historyPageSize,
+        cursor: cursor,
+      );
+      applyLedger(data, append: true);
     } catch (_) {}
+  }
+
+  Future<void> _loadLedger(bool history) async {
+    final token = authToken;
+    if (token == null || token.isEmpty) return;
+    try {
+      final data = await ApiService.getTransactions(
+        token: token,
+        limit: historyPageSize,
+        summary: !history,
+      );
+      applyLedger(data, replaceHistory: history);
+    } catch (_) {}
+  }
+
+  Future<void> _restoreLedger() async {
+    final raw = await AccountStore.readLedger();
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final collected = decoded['collected'];
+      if (collected is num) walletBalance = collected.toInt();
+      final rows = decoded['transactions'];
+      if (rows is! List) return;
+      transactions
+        ..clear()
+        ..addAll(rows.whereType<Map>().map((row) {
+          final map = Map<String, dynamic>.from(row);
+          final typeName = (map['type'] ?? 'nauli').toString();
+          final type = TransactionType.values.asNameMap()[typeName] ??
+              TransactionType.nauli;
+          return Transaction(
+            passengerName: (map['passengerName'] ?? '').toString(),
+            amount: (map['amount'] as num?)?.toInt() ?? 0,
+            time: DateTime.tryParse('${map['time'] ?? ''}')?.toLocal() ??
+                DateTime.now(),
+            type: type,
+            detail: (map['detail'] ?? '').toString(),
+            reference: (map['reference'] ?? '').toString(),
+            fee: (map['fee'] as num?)?.toInt(),
+            totalDebit: (map['totalDebit'] as num?)?.toInt(),
+          );
+        }));
+    } catch (_) {}
+  }
+
+  Future<void> _persistLedger() async {
+    final payload = {
+      'collected': walletBalance,
+      'transactions': transactions.take(20).map((tx) => {
+            'passengerName': tx.passengerName,
+            'amount': tx.amount,
+            'time': tx.time.toUtc().toIso8601String(),
+            'type': tx.type.name,
+            'detail': tx.detail,
+            'reference': tx.reference,
+            'fee': tx.fee,
+            'totalDebit': tx.totalDebit,
+          }).toList(),
+    };
+    await AccountStore.saveLedger(jsonEncode(payload));
   }
 
   void setWalletBalance(int value) {
@@ -177,24 +304,49 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void applyLedger(Map<String, dynamic> data) {
-    final rows = data['transactions'];
-    final withdrawalRows = data['withdrawals'];
+  void applyLedger(
+    Map<String, dynamic> data, {
+    bool replaceHistory = true,
+    bool append = false,
+  }) {
     final collected = data['collected'];
-    final nauli = _parseNauli(rows);
-    final withdrawals = _parseWithdrawals(withdrawalRows);
-    transactions
-      ..clear()
-      ..addAll([...nauli, ...withdrawals])
-      ..sort((a, b) => b.time.compareTo(a.time));
-    if (collected is num) {
-      walletBalance = collected.toInt();
+    if (collected is num) walletBalance = collected.toInt();
+    if (!replaceHistory) {
+      notifyListeners();
+      _persistLedger();
+      return;
+    }
+    final nauli = _parseNauli(data['transactions']);
+    final withdrawals = _parseWithdrawals(data['withdrawals']);
+    final payouts = _parsePayouts(data['payouts']);
+    final incoming = [...nauli, ...withdrawals, ...payouts];
+    if (append) {
+      final seen = transactions
+          .map((tx) => '${tx.type.name}:${tx.reference}')
+          .toSet();
+      for (final tx in incoming) {
+        final key = '${tx.type.name}:${tx.reference}';
+        if (tx.reference.isEmpty || !seen.contains(key)) {
+          transactions.add(tx);
+          seen.add(key);
+        }
+      }
     } else {
+      transactions
+        ..clear()
+        ..addAll(incoming);
+    }
+    transactions.sort((a, b) => b.time.compareTo(a.time));
+    if (collected is! num && !append) {
       walletBalance = nauli.fold(0, (sum, tx) => sum + tx.amount) -
           withdrawals.fold(0, (sum, tx) => sum + tx.amount);
       if (walletBalance < 0) walletBalance = 0;
     }
+    ledgerHasMore = data['hasMore'] == true;
+    final next = data['nextCursor']?.toString();
+    ledgerCursor = next == null || next.isEmpty ? null : next;
     notifyListeners();
+    _persistLedger();
   }
 
   List<Transaction> _parseNauli(Object? rows) {
@@ -203,14 +355,9 @@ class AppState extends ChangeNotifier {
       final map = row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
       final createdAt = DateTime.tryParse('${map['createdAt'] ?? ''}') ??
           DateTime.now();
-      final first = (map['firstName'] ?? '').toString().trim();
-      final last = (map['lastName'] ?? '').toString().trim();
-      final fromNames = '$first $last'.trim();
-      final passenger = fromNames.isNotEmpty
-          ? fromNames
-          : (map['passenger'] ?? map['card'] ?? '').toString();
+      final card = (map['card'] ?? '').toString().trim();
       return Transaction(
-        passengerName: passenger.isEmpty ? 'Passenger' : passenger,
+        passengerName: card.isEmpty ? 'D-Card' : card,
         amount: (map['amount'] as num?)?.toInt() ?? 0,
         time: createdAt.toLocal(),
         reference: (map['reference'] ?? '').toString(),
@@ -235,6 +382,29 @@ class AppState extends ChangeNotifier {
         type: TransactionType.toaPesa,
         reference: (map['reference'] ?? '').toString(),
         detail: detail,
+      );
+    }).toList();
+  }
+
+  List<Transaction> _parsePayouts(Object? rows) {
+    if (rows is! List) return const [];
+    return rows.map((row) {
+      final map = row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
+      final createdAt = DateTime.tryParse('${map['createdAt'] ?? ''}') ??
+          DateTime.now();
+      final provider = (map['provider'] ?? '').toString();
+      final destination = (map['destination'] ?? '').toString();
+      final status = (map['status'] ?? '').toString();
+      final fee = (map['platformFee'] as num?)?.toInt() ?? (map['fee'] as num?)?.toInt();
+      return Transaction(
+        passengerName: destination.isEmpty ? provider : '$provider $destination',
+        amount: (map['amount'] as num?)?.toInt() ?? 0,
+        time: createdAt.toLocal(),
+        type: TransactionType.toaPesa,
+        reference: (map['reference'] ?? '').toString(),
+        detail: status,
+        fee: fee,
+        totalDebit: (map['totalDebit'] as num?)?.toInt(),
       );
     }).toList();
   }
@@ -325,8 +495,8 @@ class AppState extends ChangeNotifier {
     if (user == null) return;
     if (name != null) {
       final parts = name.trim().split(RegExp(r'\s+'));
-      user.firstName = parts.isEmpty ? user.firstName : parts.first;
-      user.lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      user.firstName = parts.isEmpty ? user.firstName : parts.first.toUpperCase();
+      user.lastName = parts.length > 1 ? parts.sublist(1).join(' ').toUpperCase() : '';
     }
     if (email != null) user.email = email;
     if (phone != null) user.phone = phone;

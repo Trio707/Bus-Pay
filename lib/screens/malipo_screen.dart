@@ -90,8 +90,14 @@ class _MalipoScreenState extends State<MalipoScreen> {
     final s = S(app.language);
 
     return SafeArea(
-      child: Column(
-        children: [
+      child: RefreshIndicator(
+      onRefresh: () => app.refreshLedger(history: false),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
           Container(
             width: double.infinity,
             margin: const EdgeInsets.all(16),
@@ -163,6 +169,13 @@ class _MalipoScreenState extends State<MalipoScreen> {
             ),
           ),
           const SizedBox(height: 10),
+              ],
+            ),
+          ),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Column(
+              children: [
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -235,7 +248,11 @@ class _MalipoScreenState extends State<MalipoScreen> {
               ),
             ),
           ),
+              ],
+            ),
+          ),
         ],
+      ),
       ),
     );
   }

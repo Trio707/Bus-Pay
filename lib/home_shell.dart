@@ -18,15 +18,30 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int index = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AppScope.of(context).refreshLedger();
+      final app = AppScope.of(context);
+      app.refreshLedger(history: !app.dataSaver);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    final app = AppScope.of(context);
+    app.refreshLedger(history: !app.dataSaver && index == 1);
   }
 
   @override
@@ -68,7 +83,12 @@ class _HomeShellState extends State<HomeShell> {
       ),
       drawer: AppDrawer(
         selected: index,
-        onSelect: (value) => setState(() => index = value),
+        onSelect: (value) {
+          setState(() => index = value);
+          if (value == 1) {
+            AppScope.of(context).refreshLedger(history: true);
+          }
+        },
       ),
       body: IndexedStack(
         index: index,

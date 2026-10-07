@@ -48,6 +48,14 @@ class SettingsScreen extends StatelessWidget {
           selected: {app.displaySize},
           onSelectionChanged: (value) => app.setDisplaySize(value.first),
         ),
+        const SizedBox(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(s.dataSaver),
+          subtitle: Text(s.dataSaverHint),
+          value: app.dataSaver,
+          onChanged: app.setDataSaver,
+        ),
       ],
     );
   }

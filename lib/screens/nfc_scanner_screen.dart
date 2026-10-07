@@ -10,9 +10,14 @@ import '../state/app_state.dart';
 import 'payment_success_screen.dart';
 
 class NfcScannerScreen extends StatefulWidget {
-  const NfcScannerScreen({super.key, required this.amount});
+  const NfcScannerScreen({
+    super.key,
+    required this.amount,
+    this.idempotencyKey,
+  });
 
   final int amount;
+  final String? idempotencyKey;
 
   @override
   State<NfcScannerScreen> createState() => _NfcScannerScreenState();
@@ -24,6 +29,7 @@ class _NfcScannerScreenState extends State<NfcScannerScreen>
   bool found = false;
   bool resolving = false;
   bool navigated = false;
+  late final String _fareKey = widget.idempotencyKey ?? newIdempotencyKey();
 
   @override
   void initState() {
@@ -89,13 +95,14 @@ class _NfcScannerScreenState extends State<NfcScannerScreen>
       final result = await ApiService.tapPay(
         token: token,
         amount: widget.amount,
+        idempotencyKey: _fareKey,
         serialNumber: serialNumber,
         nfcUid: nfcUid,
       );
 
       final customer = result['customer'] as Map<String, dynamic>? ?? {};
       var name =
-          '${customer['firstName'] ?? ''} ${customer['lastName'] ?? ''}'.trim();
+          '${customer['firstName'] ?? ''} ${customer['lastName'] ?? ''}'.trim().toUpperCase();
       if (name.isEmpty) {
         name = (result['passenger'] ?? '').toString();
       }
@@ -110,7 +117,7 @@ class _NfcScannerScreenState extends State<NfcScannerScreen>
 
       // Refresh balance quietly after the success screen is up.
       Future<void>.delayed(const Duration(milliseconds: 400), () {
-        app.refreshLedger();
+        app.refreshLedger(history: false);
       });
     } catch (e) {
       if (!mounted || navigated) return;
@@ -122,7 +129,10 @@ class _NfcScannerScreenState extends State<NfcScannerScreen>
           Navigator.pushReplacement(
             context,
             AppPageRoute(
-              builder: (_) => NfcScannerScreen(amount: widget.amount),
+              builder: (_) => NfcScannerScreen(
+                amount: widget.amount,
+                idempotencyKey: _fareKey,
+              ),
             ),
           );
         },

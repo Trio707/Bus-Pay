@@ -19,7 +19,10 @@ class _MiamalaScreenState extends State<MiamalaScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app = AppScope.of(context);
+      if (!app.dataSaver) _reload();
+    });
   }
 
   @override
@@ -68,6 +71,8 @@ class _MiamalaScreenState extends State<MiamalaScreen>
                       onRefresh: _reload,
                       language: app.language,
                       inbound: true,
+                      hasMore: app.ledgerHasMore,
+                      onLoadMore: app.loadMoreLedger,
                     ),
                     _TxList(
                       items: withdrawals,
@@ -75,6 +80,8 @@ class _MiamalaScreenState extends State<MiamalaScreen>
                       onRefresh: _reload,
                       language: app.language,
                       inbound: false,
+                      hasMore: app.ledgerHasMore,
+                      onLoadMore: app.loadMoreLedger,
                     ),
                   ],
                 ),
@@ -91,6 +98,8 @@ class _TxList extends StatelessWidget {
     required this.onRefresh,
     required this.language,
     required this.inbound,
+    required this.hasMore,
+    required this.onLoadMore,
   });
 
   final List<Transaction> items;
@@ -98,6 +107,8 @@ class _TxList extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final AppLanguage language;
   final bool inbound;
+  final bool hasMore;
+  final Future<void> Function() onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -135,18 +146,30 @@ class _TxList extends StatelessWidget {
       onRefresh: onRefresh,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
+        itemCount: items.length + (hasMore ? 1 : 0),
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, i) {
+          if (i >= items.length) {
+            return TextButton(
+              onPressed: onLoadMore,
+              child: Text(s.loadMore),
+            );
+          }
           final tx = items[i];
           final isIn = inbound && tx.type == TransactionType.nauli;
           final subtitle = switch (tx.type) {
             TransactionType.nauli => tx.reference.isEmpty
                 ? s.paid
                 : '${s.paid} • ${tx.reference}',
-            TransactionType.toaPesa => tx.reference.isEmpty
-                ? '${s.withdrawn} • ${tx.detail}'
-                : '${s.withdrawn} • ${tx.detail} • ${tx.reference}',
+            TransactionType.toaPesa => tx.totalDebit == null
+                ? (tx.reference.isEmpty
+                    ? '${s.withdrawn} • ${tx.detail}'
+                    : '${s.withdrawn} • ${tx.detail} • ${tx.reference}')
+                : '${s.amountYouReceive} ${s.tzs(tx.amount)}\n'
+                    '${s.payoutFee} ${s.tzs(tx.fee ?? 0)}\n'
+                    '${s.payoutTotalDebit} ${s.tzs(tx.totalDebit!)}\n'
+                    '${s.payoutStatus(tx.detail)}'
+                    '${tx.reference.isEmpty ? '' : ' • ${tx.reference}'}',
             TransactionType.tumaPesa => '${s.sent} • ${tx.detail}',
           };
           final time =
@@ -167,7 +190,11 @@ class _TxList extends StatelessWidget {
                 tx.passengerName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text('$subtitle • $time'),
+              subtitle: Text(
+                tx.totalDebit == null ? '$subtitle • $time' : '$subtitle\n$time',
+                maxLines: 6,
+              ),
+              isThreeLine: tx.totalDebit != null,
               trailing: Text(
                 '${isIn ? '+' : '-'}${s.tzs(tx.amount)}',
                 style: TextStyle(

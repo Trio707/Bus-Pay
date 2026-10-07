@@ -56,6 +56,23 @@ class AgentSettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
+            s.dataSaver,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: primary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(s.dataSaver),
+            subtitle: Text(s.dataSaverHint),
+            value: app.dataSaver,
+            onChanged: app.setDataSaver,
+          ),
+          const SizedBox(height: 24),
+          Text(
             s.security,
             style: TextStyle(
               fontWeight: FontWeight.w600,

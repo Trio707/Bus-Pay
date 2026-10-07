@@ -43,8 +43,9 @@ class S {
   String get sajiliCardHint =>
       isSw ? 'Andika kadi mpya na salio la kwanza' : 'Issue a new card with first load';
   String get renewCard => isSw ? 'Huisha card' : 'Renew card';
-  String get renewCardHint =>
-      isSw ? 'Huisha UID au taarifa za kadi' : 'Refresh UID or card details';
+  String get renewCardHint => isSw
+      ? 'Badilisha kadi iliyopotea. Namba ya kadi inabaki'
+      : 'Replace a lost card. The card number stays';
   String get topUpCard => isSw ? 'Ongeza salio' : 'Top up card';
   String get topUpCardHint =>
       isSw ? 'Weka pesa kwenye kadi' : 'Add money to a card';
@@ -59,6 +60,19 @@ class S {
   String get amountAdded => isSw ? 'Kiasi kilichoongezwa' : 'Amount added';
   String get cardServices => isSw ? 'Huduma za kadi' : 'Card services';
   String get wakalaDesk => isSw ? 'Dawati la wakala' : 'Agent desk';
+  String get availableFloat => isSw ? 'Float iliyopo' : 'Available Float';
+  String get floatHistory => isSw ? 'Historia ya float' : 'Float History';
+  String get slideForFloat =>
+      isSw ? 'Telezesha kushoto kuona float' : 'Slide left to see float';
+  String get tapToReveal => isSw ? 'Gusa kuonyesha' : 'Tap to reveal';
+  String get tapToHide => isSw ? 'Gusa kuficha' : 'Tap to hide';
+  String get floatFunding => isSw ? 'Ufadhili wa float' : 'Float Funding';
+  String get conductorWithdrawal =>
+      isSw ? 'Kutoa kwa kondakta' : 'Conductor Withdrawal';
+  String get floatAdjustment => isSw ? 'Marekebisho' : 'Adjustment';
+  String get balanceAfter => isSw ? 'Salio baada' : 'Balance after';
+  String get noFloatHistory =>
+      isSw ? 'Hakuna historia ya float bado' : 'No float history yet';
   String get huishaCard => isSw ? 'Huisha card' : 'Deactivate card';
   String get msaada => isSw ? 'Msaada' : 'Help';
   String get jihudumie => isSw ? 'Jihudumie' : 'Self service';
@@ -92,8 +106,21 @@ class S {
       isSw ? 'Nenosiri limebadilishwa' : 'Password reset successful';
   String get devResetCode => isSw ? 'Namba ya majaribio' : 'Test code';
   String get strongPasswordHint => isSw
-      ? 'Angalau herufi 8, kubwa, ndogo, namba na alama. Mfano: Wakala@123'
-      : 'At least 8 characters with upper, lower, number and symbol. Example: Wakala@123';
+      ? 'Angalau herufi 12, kubwa, ndogo, namba na alama.'
+      : 'At least 12 characters with upper, lower, number and symbol.';
+  String get passwordTooWeak => isSw
+      ? 'Nenosiri ni dhaifu. Tumia angalau herufi 12 zikiwemo kubwa, ndogo, namba na alama.'
+      : 'Password is too weak. Use at least 12 characters including uppercase, lowercase, number, and special character.';
+  String passwordStrength(String level) {
+    switch (level) {
+      case 'Strong':
+        return isSw ? 'Imara' : 'Strong';
+      case 'Medium':
+        return isSw ? 'Wastani' : 'Medium';
+      default:
+        return isSw ? 'Dhaifu' : 'Weak';
+    }
+  }
   String get enterPin => isSw ? 'Weka PIN' : 'Enter PIN';
   String get wekaPin => isSw ? 'Weka PIN' : 'Enter PIN';
   String get hakikiPin => isSw ? 'Hakiki PIN' : 'Confirm PIN';
@@ -117,6 +144,13 @@ class S {
       : 'Camera did not open. Allow camera access and try again.';
   String get continueBtn => isSw ? 'Endelea' : 'Continue';
   String get cardNumber => isSw ? 'Namba ya card' : 'Card number';
+  String get cardNumberKept => isSw
+      ? 'Namba hii ya kadi haitabadilika'
+      : 'This card number stays the same';
+  String get scanNewCard => isSw ? 'Soma kadi mpya' : 'Scan the new card';
+  String get scanNewCardHint => isSw
+      ? 'Gusa kadi mpya. Namba ya kadi ya abiria itabaki ile ile.'
+      : 'Scan the new card. The passenger card number stays the same.';
   String get lostCardNumber =>
       isSw ? 'Namba ya card iliyopotea' : 'Lost card number';
   String get customerName => isSw ? 'Jina la mteja' : 'Customer name';
@@ -155,6 +189,14 @@ class S {
       ? 'Lugha na nenosiri'
       : 'Language and password';
   String get profile => isSw ? 'Wasifu' : 'Profile';
+  String get takePhoto => isSw ? 'Piga picha' : 'Take photo';
+  String get chooseGallery => isSw ? 'Chagua kutoka kwenye simu' : 'Choose from gallery';
+  String get removePhoto => isSw ? 'Ondoa picha' : 'Remove photo';
+  String get uploadingPhoto => isSw ? 'Inapakia...' : 'Uploading...';
+  String get photoUpdated => isSw ? 'Picha imesasishwa' : 'Photo updated successfully';
+  String get photoRemoved => isSw ? 'Picha imeondolewa' : 'Photo removed';
+  String get photoUploadFailed =>
+      isSw ? 'Picha haijapakiwa. Jaribu tena.' : 'Photo was not uploaded. Try again.';
   String get wallet => isSw ? 'Pochi' : 'Wallet';
   String get nauli => isSw ? 'NAULI' : 'FARE';
   String get lipia => isSw ? 'LIPIA' : 'PAY';
@@ -167,6 +209,26 @@ class S {
   String get verifyTitle =>
       isSw ? 'Thibitisha malipo' : 'Verify payment';
   String get confirm => isSw ? 'Thibitisha' : 'Confirm';
+  String get confirmPayout => isSw ? 'THIBITISHA' : 'CONFIRM';
+  String get amountYouReceive =>
+      isSw ? 'Kiasi utakachopokea' : 'Amount you will receive';
+  String get payoutFee => isSw ? 'Ada ya kutoa pesa' : 'Withdrawal fee';
+  String get payoutTotalDebit => isSw
+      ? 'Jumla itakayokatwa kwenye mapato'
+      : 'Total deducted from earnings';
+  String get payoutInsufficient => isSw
+      ? 'Mapato hayatoshi kulipia kiasi hiki pamoja na ada.'
+      : 'Earnings are not enough for this amount plus the fee.';
+  String payoutStatus(String code) {
+    return switch (code) {
+      'COMPLETED' => isSw ? 'Imekamilika' : 'Completed',
+      'FAILED' => isSw ? 'Imeshindwa' : 'Failed',
+      'REVERSED' => isSw ? 'Imerejeshwa' : 'Reversed',
+      'PROCESSING' => isSw ? 'Inashughulikiwa' : 'Processing',
+      'PENDING' => isSw ? 'Inasubiri' : 'Pending',
+      _ => code,
+    };
+  }
   String get cancel => isSw ? 'Ghairi' : 'Cancel';
   String get noTx =>
       isSw ? 'Hakuna miamala bado' : 'No transactions yet';
@@ -177,7 +239,19 @@ class S {
   String get agentCode => isSw ? 'Namba ya wakala' : 'Agent number';
   String get wakalaTill => isSw ? 'TILL ya wakala' : 'Wakala TILL';
   String get toaPesaHint =>
-      isSw ? 'Toa pesa kupitia wakala' : 'Withdraw through an agent';
+      isSw ? 'Chagua njia ya kutoa pesa' : 'Choose how to withdraw';
+  String get cashAtWakala => isSw ? 'Taslimu kwa wakala' : 'Cash at Wakala';
+  String get mobileMoney => isSw ? 'Mitandao ya simu' : 'Mobile money';
+  String get bankAccount => isSw ? 'Akaunti ya benki' : 'Bank account';
+  String get payoutProvider => isSw ? 'Mtoa huduma' : 'Provider';
+  String get payoutProviderHint => isSw
+      ? 'Weka msimbo uliopewa na BusPay. Si kila mtandao unafanya kazi bado.'
+      : 'Enter the code BusPay enabled. Not every provider works yet.';
+  String get accountNumber => isSw ? 'Namba ya akaunti' : 'Account number';
+  String get accountName => isSw ? 'Jina la akaunti' : 'Account name';
+  String get payoutPending => isSw
+      ? 'Ombi linashughulikiwa. Haijakamilika bado.'
+      : 'The request is processing. It is not completed yet.';
   String get toaPesaTillHint => isSw
       ? 'Weka namba ya TILL ya wakala, kisha endelea.'
       : 'Enter the wakala TILL number, then continue.';
@@ -195,6 +269,11 @@ class S {
   String get theme => isSw ? 'Mandhari' : 'Theme';
   String get languageLabel => isSw ? 'Lugha' : 'Language';
   String get display => isSw ? 'Onyesho' : 'Display';
+  String get dataSaver => isSw ? 'Hifadhi data' : 'Data Saver';
+  String get dataSaverHint => isSw
+      ? 'Inapunguza upakuaji wa historia. Malipo ya NFC yanaendelea.'
+      : 'Downloads less history. NFC fare collection stays on.';
+  String get loadMore => isSw ? 'Pakia zaidi' : 'Load more';
   String get light => isSw ? 'Mwanga' : 'Light';
   String get dark => isSw ? 'Giza' : 'Dark';
   String get system => isSw ? 'Mfumo' : 'System';

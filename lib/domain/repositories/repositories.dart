@@ -24,6 +24,7 @@ abstract class CardRepository {
     String? lastName,
     String? phone,
     int amount = 0,
+    String? idempotencyKey,
   });
 
   Future<Map<String, dynamic>> topUpCard({
